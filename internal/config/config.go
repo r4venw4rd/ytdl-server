@@ -22,7 +22,7 @@ func Load() *Config {
 	cfg := &Config{
 		Port:              getEnv("PORT", ":8080"),
 		MaxConcurrentJobs: getEnvAsInt("MAX_CONCURRENT_JOBS", 3),
-		CleanupAfter:      time.Duration(getEnvAsInt("CLEAN_UP_AFTER_MINUTES", 15)) * time.Minute,
+		CleanupAfter:      time.Duration(getCleanupMinutes()) * time.Minute,
 		DownloadDir:       getEnv("DOWNLOAD_DIR", "downloads"),
 		TempDir:           getEnv("TEMP_DIR", "temp"),
 		WebDir:            getEnv("WEB_DIR", "./web"),
@@ -32,6 +32,12 @@ func Load() *Config {
 	validate(cfg)
 
 	return cfg
+}
+
+// getCleanupMinutes reads CLEAN_UP_AFTER_MINUTES, falling back to the legacy
+// CLEAN_UP_MINUTES key used by older .ytdl-config files.
+func getCleanupMinutes() int {
+	return getEnvAsInt("CLEAN_UP_AFTER_MINUTES", getEnvAsInt("CLEAN_UP_MINUTES", 15))
 }
 
 func getEnv(key, fallback string) string {

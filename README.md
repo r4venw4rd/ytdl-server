@@ -257,7 +257,7 @@ docker-compose up -d
 
 🧹 Maintenance & Monitoring
 
-    Janitor Service: Automated cleanup of TEMP_DIR every X minutes (configurable interval defined in config).
+    Janitor Service: Finished jobs, their downloads and stale temp files are removed after CLEAN_UP_AFTER_MINUTES (default 15); the janitor runs at the same interval. The legacy key CLEAN_UP_MINUTES is still accepted.
 
     Logs: Written to the configured data directory. Monitor progress with: tail -f /your/data/path/output.log
 
