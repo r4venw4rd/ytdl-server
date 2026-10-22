@@ -73,8 +73,7 @@ func (h *Handler) SSE(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
-	// CORS
-	w.Header().Set("Access-Control-Allow-Origin", "*")
+	// CORS headers are set by CORSMiddleware according to ALLOWED_ORIGINS.
 
 	rc := http.NewResponseController(w)
 	ticker := time.NewTicker(500 * time.Millisecond)
