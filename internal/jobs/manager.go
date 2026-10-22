@@ -79,18 +79,34 @@ func (m *Manager) updateStatus(job *models.Job, status string, pct float64, errS
 	job.Update(status, pct, errStr)
 }
 
-func (m *Manager) startJanitor() {
-	ticker := time.NewTicker(5 * time.Minute)
-	for range ticker.C {
-		now := time.Now()
-		m.jobs.Range(func(key, value interface{}) bool {
-			job := value.(*models.Job)
-			if now.Sub(job.CreatedAt) > m.cfg.CleanupAfter {
-				os.Remove(job.FilePath)
-				m.jobs.Delete(key)
-				log.Println("🧹 Cleaned up job:", job.ID)
-			}
+// StartJanitor periodically drops finished jobs older than cfg.CleanupAfter
+// from the job map and deletes their output files. It runs every
+// cfg.CleanupAfter in a background goroutine.
+func (m *Manager) StartJanitor() {
+	go func() {
+		ticker := time.NewTicker(m.cfg.CleanupAfter)
+		defer ticker.Stop()
+		for now := range ticker.C {
+			m.cleanupJobs(now)
+		}
+	}()
+}
+
+func (m *Manager) cleanupJobs(now time.Time) {
+	m.jobs.Range(func(key, value interface{}) bool {
+		job := value.(*models.Job)
+		if now.Sub(job.CreatedAt) <= m.cfg.CleanupAfter {
 			return true
-		})
-	}
+		}
+		// Never pull the file out from under a job that is still running.
+		if !job.Snapshot().IsDone() {
+			return true
+		}
+		if err := os.Remove(job.FilePath); err != nil && !os.IsNotExist(err) {
+			log.Printf("❌ Janitor: could not remove %s: %v", job.FilePath, err)
+		}
+		m.jobs.Delete(key)
+		log.Println("🧹 Cleaned up job:", job.ID)
+		return true
+	})
 }

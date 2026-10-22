@@ -55,6 +55,10 @@ func validate(cfg *Config) {
 		log.Println("⚠️ Warning: MAX_CONCURRENT_JOBS must be at least 1. Resetting to 3.")
 		cfg.MaxConcurrentJobs = 3
 	}
+	if cfg.CleanupAfter <= 0 {
+		log.Println("⚠️ Warning: CLEAN_UP_AFTER_MINUTES must be at least 1. Resetting to 15.")
+		cfg.CleanupAfter = 15 * time.Minute
+	}
 	if _, err := os.Stat(cfg.DownloadDir); os.IsNotExist(err) {
 		log.Printf("📂 Notice: Creating missing download directory: %s\n", cfg.DownloadDir)
 		os.MkdirAll(cfg.DownloadDir, 0755)

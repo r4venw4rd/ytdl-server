@@ -24,6 +24,8 @@ func main() {
 
 	// 2. Servisler: Job Manager ve Handler
 	jobManager := jobs.NewManager(cfg)
+	jobManager.StartJanitor()
+	jobs.StartJanitor(cfg)
 	handler := api.NewHandler(jobManager)
 
 	// 3. Router: Middleware dahil edilmiş haliyle
