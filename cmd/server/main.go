@@ -27,7 +27,7 @@ func main() {
 	handler := api.NewHandler(jobManager)
 
 	// 3. Router: Middleware dahil edilmiş haliyle
-	router := api.NewRouter(handler)
+	router := api.NewRouter(handler, cfg.WebDir)
 
 	fmt.Println(">>> 🏭 YTDL Server Started")
 	fmt.Printf(">>> ⚡ Port: %s\n", cfg.Port)

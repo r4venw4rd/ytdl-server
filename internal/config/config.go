@@ -14,6 +14,7 @@ type Config struct {
 	CleanupAfter      time.Duration
 	DownloadDir       string
 	TempDir           string
+	WebDir            string // directory of the bundled web client served at "/"
 }
 
 // Load: The only way to get config in the app
@@ -24,7 +25,7 @@ func Load() *Config {
 		CleanupAfter:      time.Duration(getEnvAsInt("CLEAN_UP_AFTER_MINUTES", 15)) * time.Minute,
 		DownloadDir:       getEnv("DOWNLOAD_DIR", "downloads"),
 		TempDir:           getEnv("TEMP_DIR", "temp"),
-		WebDir:			   getEnv("WEB_DIR", "./web")
+		WebDir:            getEnv("WEB_DIR", "./web"),
 	}
 
 	// 🛡️ Post-load Validation
