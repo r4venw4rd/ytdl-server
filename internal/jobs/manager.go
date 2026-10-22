@@ -76,10 +76,7 @@ func (m *Manager) runWorker(job *models.Job, quality string) {
 }
 
 func (m *Manager) updateStatus(job *models.Job, status string, pct float64, errStr string) {
-	job.Status = status
-	job.Percentage = pct
-	job.Error = errStr
-	m.jobs.Store(job.ID, job)
+	job.Update(status, pct, errStr)
 }
 
 func (m *Manager) startJanitor() {

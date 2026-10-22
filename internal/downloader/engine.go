@@ -35,7 +35,7 @@ func Process(job *models.Job, quality string, tempDir string, onProgress Progres
 
 	// FILE PATHS
 	safeTitle := sanitizeFilename(video.Title)
-	job.Filename = fmt.Sprintf("%s_%dp.mp4", safeTitle, targetHeight)
+	job.SetFilename(fmt.Sprintf("%s_%dp.mp4", safeTitle, targetHeight))
 
 	videoTemp := filepath.Join(tempDir, fmt.Sprintf("v_%s.mp4", job.ID))
 	audioTemp := filepath.Join(tempDir, fmt.Sprintf("a_%s.m4a", job.ID))

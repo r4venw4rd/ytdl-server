@@ -81,11 +81,12 @@ func (h *Handler) SSE(w http.ResponseWriter, r *http.Request) {
 				rc.Flush()
 				return
 			}
-			data, _ := json.Marshal(job)
+			snap := job.Snapshot()
+			data, _ := json.Marshal(snap)
 			fmt.Fprintf(w, "data: %s\n\n", data)
 			rc.Flush()
 
-			if job.Status == "ready" || job.Status == "failed" {
+			if snap.IsDone() {
 				return
 			}
 		}
@@ -104,14 +105,15 @@ func (h *Handler) Download(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Job not found", http.StatusNotFound)
 		return
 	}
-	if job.Status != "ready" {
+	snap := job.Snapshot()
+	if snap.Status != "ready" {
 		http.Error(w, "Not ready", http.StatusBadRequest)
 		return
 	}
 
-	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", job.Filename))
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", snap.Filename))
 	w.Header().Set("Content-Type", "video/mp4")
-	http.ServeFile(w, r, job.FilePath)
+	http.ServeFile(w, r, snap.FilePath)
 }
 
 
