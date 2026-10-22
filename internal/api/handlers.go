@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"regexp"
@@ -42,7 +43,16 @@ func (h *Handler) CreateJob(w http.ResponseWriter, r *http.Request) {
 		req.Quality = "1080p"
 	}
 
-	job := h.Manager.Create(req)
+	job, err := h.Manager.Create(r.Context(), req)
+	if errors.Is(err, jobs.ErrServerBusy) {
+		w.Header().Set("Retry-After", "10")
+		http.Error(w, "Server busy, try again later", http.StatusServiceUnavailable)
+		return
+	}
+	if err != nil {
+		http.Error(w, "Could not create job", http.StatusInternalServerError)
+		return
+	}
 
 	w.WriteHeader(http.StatusAccepted)
 	json.NewEncoder(w).Encode(map[string]string{
