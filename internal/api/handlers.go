@@ -132,6 +132,10 @@ func (h *Handler) GetVideoInfo(w http.ResponseWriter, r *http.Request) {
         http.Error(w, "video_id required", http.StatusBadRequest)
         return
     }
+    if !videoIDRegex.MatchString(videoID) {
+        http.Error(w, "Invalid Video ID", http.StatusBadRequest)
+        return
+    }
 
     client := youtube.Client{}
     video, err := client.GetVideo(videoID)
