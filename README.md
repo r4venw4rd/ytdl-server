@@ -21,7 +21,7 @@ Disclaimer: This tool is for educational purposes and personal use only. Users a
 🛠️ Prerequisites
 
 ```
-    Go 1.21+
+    Go 1.25+
 
     FFmpeg (compiled with libx264 support)
 
@@ -192,7 +192,7 @@ if __name__ == "__main__":
 
 🐳 Docker Deployment
 
-The project uses a Multi-Stage Dockerfile to ensure a small footprint and maximum security. The image consumes the .env file generated during the make setup phase.
+The project uses a Multi-Stage Dockerfile to ensure a small footprint and maximum security. The container reads its configuration from the .env file generated during the make setup phase, passed in at runtime via env_file (it is not baked into the image).
 
 1. The Dockerfile
 
@@ -200,7 +200,7 @@ Create a file named Dockerfile in your root directory:
 
 ```
 # --- Stage 1: Build ---
-FROM golang:1.21-alpine AS builder
+FROM golang:1.25-alpine AS builder
 RUN apk add --no-cache make git
 WORKDIR /app
 COPY go.mod go.sum ./
@@ -212,9 +212,9 @@ RUN make build
 FROM alpine:latest
 RUN apk add --no-cache ffmpeg ca-certificates tzdata
 WORKDIR /app
-# Copy binary and generated config from builder
+# Copy binary and bundled web client from builder (config comes from env_file at runtime)
 COPY --from=builder /app/ytdl-server .
-COPY --from=builder /app/.env .
+COPY --from=builder /app/web ./web
 # Create storage directories and set permissions
 RUN mkdir -p temp downloads && chown -R daemon:daemon /app
 USER daemon
@@ -257,7 +257,7 @@ docker-compose up -d
 
 🧹 Maintenance & Monitoring
 
-    Janitor Service: Automated cleanup of TEMP_DIR every X minutes (configurable interval defined in config).
+    Janitor Service: Finished jobs, their downloads and stale temp files are removed after CLEAN_UP_AFTER_MINUTES (default 15); the janitor runs at the same interval. The legacy key CLEAN_UP_MINUTES is still accepted.
 
     Logs: Written to the configured data directory. Monitor progress with: tail -f /your/data/path/output.log
 

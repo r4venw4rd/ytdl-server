@@ -1,5 +1,6 @@
 # --- Stage 1: Build ---
-FROM golang:1.21-alpine AS builder
+# Must satisfy the go directive in go.mod
+FROM golang:1.25-alpine AS builder
 
 # Install build dependencies
 RUN apk add --no-cache make git
@@ -23,13 +24,15 @@ FROM alpine:latest
 RUN apk add --no-cache \
     ffmpeg \
     ca-certificates \
-    tzdata \
+    tzdata
 
 WORKDIR /app
 
-# Copy only the compiled binary and the generated .env from the builder
+# Copy only the compiled binary and the bundled web client from the builder.
+# Configuration is supplied at runtime via environment variables
+# (e.g. docker run --env-file .env / compose env_file), not baked into the image.
 COPY --from=builder /app/ytdl-server /app/ytdl-server
-COPY --from=builder /app/.env /app/.env
+COPY --from=builder /app/web /app/web
 
 # Create directories defined in your .ytdl-config
 # Note: Ensure your .ytdl-config paths match these for Docker (e.g., ./downloads)

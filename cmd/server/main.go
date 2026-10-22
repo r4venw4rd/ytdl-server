@@ -24,10 +24,12 @@ func main() {
 
 	// 2. Servisler: Job Manager ve Handler
 	jobManager := jobs.NewManager(cfg)
+	jobManager.StartJanitor()
+	jobs.StartJanitor(cfg)
 	handler := api.NewHandler(jobManager)
 
 	// 3. Router: Middleware dahil edilmiş haliyle
-	router := api.NewRouter(handler)
+	router := api.NewRouter(handler, cfg.WebDir)
 
 	fmt.Println(">>> 🏭 YTDL Server Started")
 	fmt.Printf(">>> ⚡ Port: %s\n", cfg.Port)

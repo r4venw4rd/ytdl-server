@@ -7,6 +7,10 @@ SERVICE_USER=daemon
 # Use '*' for development, or specific domains for production.
 ALLOWED_ORIGINS=*
 
+# --- WEB CLIENT ---
+# Directory of the bundled web client served at "/" (default: ./web)
+# WEB_DIR=/var/lib/ytdl-server/web
+
 # --- STORAGE PATHS ---
 DATA_DIR=/var/lib/ytdl-server
 DOWNLOAD_DIR=/var/lib/ytdl-server/downloads
@@ -17,5 +21,6 @@ TEMP_DIR=/var/lib/ytdl-server/temp
 MAX_CONCURRENT_JOBS=3
 
 # --- MAINTENANCE ---
-# Interval for the janitor to purge temp files (minutes)
-CLEAN_UP_MINUTES=60
+# Finished jobs and their files are removed after this many minutes; the
+# janitor also runs at this interval. (Legacy name CLEAN_UP_MINUTES is still accepted.)
+CLEAN_UP_AFTER_MINUTES=60

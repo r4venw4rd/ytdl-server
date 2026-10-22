@@ -1,6 +1,8 @@
 package jobs
 
 import (
+	"context"
+	"errors"
 	"log"
 	"os"
 	"path/filepath"
@@ -14,20 +16,38 @@ import (
 	"github.com/google/uuid"
 )
 
+// ErrServerBusy is returned by Create when no worker slot frees up in time.
+var ErrServerBusy = errors.New("server busy")
+
 type Manager struct {
 	jobs  sync.Map
 	queue chan struct{}
 	cfg   *config.Config
+
+	acquireTimeout time.Duration // how long Create waits for a free worker slot
 }
 
 func NewManager(cfg *config.Config) *Manager {
 	return &Manager{
-		queue: make(chan struct{}, cfg.MaxConcurrentJobs),
-		cfg:   cfg,
+		queue:          make(chan struct{}, cfg.MaxConcurrentJobs),
+		cfg:            cfg,
+		acquireTimeout: 10 * time.Second,
 	}
 }
 
-func (m *Manager) Create(req models.CreateJobRequest) *models.Job {
+// Create reserves a worker slot and starts the job. If all slots stay busy
+// for acquireTimeout (or ctx is cancelled) it returns ErrServerBusy without
+// creating a job, so callers can reject the request up front.
+func (m *Manager) Create(ctx context.Context, req models.CreateJobRequest) (*models.Job, error) {
+	// Rate Limiting
+	select {
+	case m.queue <- struct{}{}:
+	case <-time.After(m.acquireTimeout):
+		return nil, ErrServerBusy
+	case <-ctx.Done():
+		return nil, ErrServerBusy
+	}
+
 	id := uuid.New().String()
 	job := &models.Job{
 		ID:        id,
@@ -40,7 +60,7 @@ func (m *Manager) Create(req models.CreateJobRequest) *models.Job {
 
 	go m.runWorker(job, req.Quality)
 
-	return job
+	return job, nil
 }
 
 func (m *Manager) Get(id string) (*models.Job, bool) {
@@ -51,15 +71,10 @@ func (m *Manager) Get(id string) (*models.Job, bool) {
 	return val.(*models.Job), true
 }
 
+// runWorker processes the job; the caller must already hold a queue slot,
+// which is released when the worker returns.
 func (m *Manager) runWorker(job *models.Job, quality string) {
-	// Rate Limiting
-	select {
-	case m.queue <- struct{}{}:
-		defer func() { <-m.queue }()
-	case <-time.After(10 * time.Second):
-		m.updateStatus(job, "failed", 0, "Server busy")
-		return
-	}
+	defer func() { <-m.queue }()
 
 	m.updateStatus(job, "processing", 0, "")
 
@@ -76,24 +91,37 @@ func (m *Manager) runWorker(job *models.Job, quality string) {
 }
 
 func (m *Manager) updateStatus(job *models.Job, status string, pct float64, errStr string) {
-	job.Status = status
-	job.Percentage = pct
-	job.Error = errStr
-	m.jobs.Store(job.ID, job)
+	job.Update(status, pct, errStr)
 }
 
-func (m *Manager) startJanitor() {
-	ticker := time.NewTicker(5 * time.Minute)
-	for range ticker.C {
-		now := time.Now()
-		m.jobs.Range(func(key, value interface{}) bool {
-			job := value.(*models.Job)
-			if now.Sub(job.CreatedAt) > m.cfg.CleanupAfter {
-				os.Remove(job.FilePath)
-				m.jobs.Delete(key)
-				log.Println("🧹 Cleaned up job:", job.ID)
-			}
+// StartJanitor periodically drops finished jobs older than cfg.CleanupAfter
+// from the job map and deletes their output files. It runs every
+// cfg.CleanupAfter in a background goroutine.
+func (m *Manager) StartJanitor() {
+	go func() {
+		ticker := time.NewTicker(m.cfg.CleanupAfter)
+		defer ticker.Stop()
+		for now := range ticker.C {
+			m.cleanupJobs(now)
+		}
+	}()
+}
+
+func (m *Manager) cleanupJobs(now time.Time) {
+	m.jobs.Range(func(key, value interface{}) bool {
+		job := value.(*models.Job)
+		if now.Sub(job.CreatedAt) <= m.cfg.CleanupAfter {
 			return true
-		})
-	}
+		}
+		// Never pull the file out from under a job that is still running.
+		if !job.Snapshot().IsDone() {
+			return true
+		}
+		if err := os.Remove(job.FilePath); err != nil && !os.IsNotExist(err) {
+			log.Printf("❌ Janitor: could not remove %s: %v", job.FilePath, err)
+		}
+		m.jobs.Delete(key)
+		log.Println("🧹 Cleaned up job:", job.ID)
+		return true
+	})
 }

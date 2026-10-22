@@ -35,10 +35,13 @@ func Process(job *models.Job, quality string, tempDir string, onProgress Progres
 
 	// FILE PATHS
 	safeTitle := sanitizeFilename(video.Title)
-	job.Filename = fmt.Sprintf("%s_%dp.mp4", safeTitle, targetHeight)
+	job.SetFilename(fmt.Sprintf("%s_%dp.mp4", safeTitle, targetHeight))
 
 	videoTemp := filepath.Join(tempDir, fmt.Sprintf("v_%s.mp4", job.ID))
 	audioTemp := filepath.Join(tempDir, fmt.Sprintf("a_%s.m4a", job.ID))
+	// Temp streams are never needed once Process returns, whether it succeeded or not.
+	defer os.Remove(videoTemp)
+	defer os.Remove(audioTemp)
 
 	totalSize := videoFormat.ContentLength + audioFormat.ContentLength
 	var currentBytes int64 = 0
@@ -86,14 +89,13 @@ func Process(job *models.Job, quality string, tempDir string, onProgress Progres
 		"-i", videoTemp, "-i", audioTemp, "-c", "copy", job.FilePath)
 
 	if out, err := cmd.CombinedOutput(); err != nil {
+		os.Remove(job.FilePath) // drop any partial output
 		return fmt.Errorf("ffmpeg: %s", string(out))
 	}
 
-	os.Remove(videoTemp)
-	os.Remove(audioTemp)
-
 	// 0 Byte kontrolü
 	if info, err := os.Stat(job.FilePath); err != nil || info.Size() == 0 {
+		os.Remove(job.FilePath)
 		return fmt.Errorf("generated file is empty")
 	}
 
@@ -102,7 +104,7 @@ func Process(job *models.Job, quality string, tempDir string, onProgress Progres
 
 // --- Helpers (Private) ---
 
-func downloadStream(c youtube.Client, v *youtube.Video, f *youtube.Format, path string, cb func(int)) error {
+func downloadStream(c youtube.Client, v *youtube.Video, f *youtube.Format, path string, cb func(int)) (err error) {
 	stream, _, err := c.GetStream(v, f)
 	if err != nil {
 		return err
@@ -113,20 +115,27 @@ func downloadStream(c youtube.Client, v *youtube.Video, f *youtube.Format, path 
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer func() {
+		// A failed Close can mean buffered data never reached the disk.
+		if cerr := file.Close(); cerr != nil && err == nil {
+			err = cerr
+		}
+	}()
 
 	buf := make([]byte, 32*1024)
 	for {
-		n, err := stream.Read(buf)
+		n, rerr := stream.Read(buf)
 		if n > 0 {
-			file.Write(buf[:n])
+			if _, werr := file.Write(buf[:n]); werr != nil {
+				return werr
+			}
 			cb(n)
 		}
-		if err != nil {
-			if err == io.EOF {
+		if rerr != nil {
+			if rerr == io.EOF {
 				return nil
 			}
-			return err
+			return rerr
 		}
 	}
 }

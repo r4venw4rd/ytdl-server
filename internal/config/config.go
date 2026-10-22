@@ -14,6 +14,7 @@ type Config struct {
 	CleanupAfter      time.Duration
 	DownloadDir       string
 	TempDir           string
+	WebDir            string // directory of the bundled web client served at "/"
 }
 
 // Load: The only way to get config in the app
@@ -21,16 +22,22 @@ func Load() *Config {
 	cfg := &Config{
 		Port:              getEnv("PORT", ":8080"),
 		MaxConcurrentJobs: getEnvAsInt("MAX_CONCURRENT_JOBS", 3),
-		CleanupAfter:      time.Duration(getEnvAsInt("CLEAN_UP_AFTER_MINUTES", 15)) * time.Minute,
+		CleanupAfter:      time.Duration(getCleanupMinutes()) * time.Minute,
 		DownloadDir:       getEnv("DOWNLOAD_DIR", "downloads"),
 		TempDir:           getEnv("TEMP_DIR", "temp"),
-		WebDir:			   getEnv("WEB_DIR", "./web")
+		WebDir:            getEnv("WEB_DIR", "./web"),
 	}
 
 	// 🛡️ Post-load Validation
 	validate(cfg)
 
 	return cfg
+}
+
+// getCleanupMinutes reads CLEAN_UP_AFTER_MINUTES, falling back to the legacy
+// CLEAN_UP_MINUTES key used by older .ytdl-config files.
+func getCleanupMinutes() int {
+	return getEnvAsInt("CLEAN_UP_AFTER_MINUTES", getEnvAsInt("CLEAN_UP_MINUTES", 15))
 }
 
 func getEnv(key, fallback string) string {
@@ -53,6 +60,10 @@ func validate(cfg *Config) {
 	if cfg.MaxConcurrentJobs < 1 {
 		log.Println("⚠️ Warning: MAX_CONCURRENT_JOBS must be at least 1. Resetting to 3.")
 		cfg.MaxConcurrentJobs = 3
+	}
+	if cfg.CleanupAfter <= 0 {
+		log.Println("⚠️ Warning: CLEAN_UP_AFTER_MINUTES must be at least 1. Resetting to 15.")
+		cfg.CleanupAfter = 15 * time.Minute
 	}
 	if _, err := os.Stat(cfg.DownloadDir); os.IsNotExist(err) {
 		log.Printf("📂 Notice: Creating missing download directory: %s\n", cfg.DownloadDir)

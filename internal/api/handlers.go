@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"regexp"
@@ -42,7 +43,16 @@ func (h *Handler) CreateJob(w http.ResponseWriter, r *http.Request) {
 		req.Quality = "1080p"
 	}
 
-	job := h.Manager.Create(req)
+	job, err := h.Manager.Create(r.Context(), req)
+	if errors.Is(err, jobs.ErrServerBusy) {
+		w.Header().Set("Retry-After", "10")
+		http.Error(w, "Server busy, try again later", http.StatusServiceUnavailable)
+		return
+	}
+	if err != nil {
+		http.Error(w, "Could not create job", http.StatusInternalServerError)
+		return
+	}
 
 	w.WriteHeader(http.StatusAccepted)
 	json.NewEncoder(w).Encode(map[string]string{
@@ -63,8 +73,7 @@ func (h *Handler) SSE(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
-	// CORS
-	w.Header().Set("Access-Control-Allow-Origin", "*")
+	// CORS headers are set by CORSMiddleware according to ALLOWED_ORIGINS.
 
 	rc := http.NewResponseController(w)
 	ticker := time.NewTicker(500 * time.Millisecond)
@@ -81,11 +90,12 @@ func (h *Handler) SSE(w http.ResponseWriter, r *http.Request) {
 				rc.Flush()
 				return
 			}
-			data, _ := json.Marshal(job)
+			snap := job.Snapshot()
+			data, _ := json.Marshal(snap)
 			fmt.Fprintf(w, "data: %s\n\n", data)
 			rc.Flush()
 
-			if job.Status == "ready" || job.Status == "failed" {
+			if snap.IsDone() {
 				return
 			}
 		}
@@ -104,14 +114,15 @@ func (h *Handler) Download(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Job not found", http.StatusNotFound)
 		return
 	}
-	if job.Status != "ready" {
+	snap := job.Snapshot()
+	if snap.Status != "ready" {
 		http.Error(w, "Not ready", http.StatusBadRequest)
 		return
 	}
 
-	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", job.Filename))
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", snap.Filename))
 	w.Header().Set("Content-Type", "video/mp4")
-	http.ServeFile(w, r, job.FilePath)
+	http.ServeFile(w, r, snap.FilePath)
 }
 
 
@@ -119,6 +130,10 @@ func (h *Handler) GetVideoInfo(w http.ResponseWriter, r *http.Request) {
     videoID := r.URL.Query().Get("video_id")
     if videoID == "" {
         http.Error(w, "video_id required", http.StatusBadRequest)
+        return
+    }
+    if !videoIDRegex.MatchString(videoID) {
+        http.Error(w, "Invalid Video ID", http.StatusBadRequest)
         return
     }
 

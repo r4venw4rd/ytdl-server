@@ -5,7 +5,7 @@ import (
     "mime"
 )
 
-func NewRouter(h *Handler) http.Handler {
+func NewRouter(h *Handler, webDir string) http.Handler {
     mime.AddExtensionType(".js", "application/javascript")
     mime.AddExtensionType(".wasm", "application/wasm")
     mux := http.NewServeMux()
@@ -15,7 +15,7 @@ func NewRouter(h *Handler) http.Handler {
     mux.HandleFunc("/api/events/", h.SSE)
     mux.HandleFunc("/api/download/", h.Download)
 
-    fs := http.FileServer(http.Dir("./web")) 
+    fs := http.FileServer(http.Dir(webDir)) 
     mux.Handle("/", fs)
 
     return CORSMiddleware(mux)

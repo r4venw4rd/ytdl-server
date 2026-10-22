@@ -65,7 +65,7 @@ generate-env:
 	@echo "MAX_CONCURRENT_JOBS=$(MAX_CONCURRENT_JOBS)" >> .env
 	@echo "DOWNLOAD_DIR=$(DOWNLOAD_DIR)" >> .env
 	@echo "TEMP_DIR=$(TEMP_DIR)" >> .env
-	@echo "CLEAN_UP_AFTER_MINUTES=$(CLEAN_UP_MINUTES)" >> .env
+	@echo "CLEAN_UP_AFTER_MINUTES=$(or $(CLEAN_UP_AFTER_MINUTES),$(CLEAN_UP_MINUTES))" >> .env
 	@echo "ALLOWED_ORIGINS=$(ALLOWED_ORIGINS)" >> .env
 
 build:
